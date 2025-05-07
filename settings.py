@@ -11,13 +11,13 @@ BASE = config("BASE")
 BASE_FILTER = "1" if config("BASE") == "NATAL" else "2"
 STATUS = config("STATUS")
 PAGINATE = config("PAGINATE")
-EXTRA_COLS = {}
+EXTRA_COLS = {
+    'CARD_ID': 0
+}
 DESENVOLVIMENTO = config("DESENVOLVIMENTO")
 
 UNICO_USER = config("USUARIO_UNICO")
 UNICO_PASSWORD = config("SENHA_UNICO")
-
-HOUR_TO_REGISTER_EXECUTIONS = int(config("HOUR_TO_REGISTER_EXECUTIONS"))
 
 routes = f"nome_do_robo={BOT_NAME}&status_0{STATUS}=4&paginate={PAGINATE}&base={BASE_FILTER}"
 
