@@ -1,0 +1,38 @@
+======================================================
+Erro na empresa de ID 39593: Company is not found
+Payload utilizado:
+{
+  "id": 39593,
+  "fields": {
+    "TITLE": "T.A TECNOLOGIA LTDA"
+  }
+}
+======================================================
+Erro na empresa de ID 39593: Company is not found
+Payload utilizado:
+{
+  "id": 39593,
+  "fields": {
+    "TITLE": "T.A TECNOLOGIA LTDA"
+  }
+}
+======================================================
+Erro na empresa de ID 39467: Company is not found
+Payload utilizado:
+{
+  "id": 39467,
+  "fields": {
+    "TITLE": "DEALER DIGITAL LTDA"
+  }
+}
+======================================================
+Erro na empresa de ID 53737: Company is not found
+Payload utilizado:
+{
+  "id": 53737,
+  "fields": {
+    "UF_CRM_1734547962": "6462000",
+    "UF_CRM_1734548002": "Holdings de instituições não-financeiras",
+    "UF_CRM_1742817474": "HOLDING - PATRICIPACOES"
+  }
+}

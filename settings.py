@@ -19,7 +19,7 @@ DESENVOLVIMENTO = config("DESENVOLVIMENTO")
 UNICO_USER = config("USUARIO_UNICO")
 UNICO_PASSWORD = config("SENHA_UNICO")
 
-routes = f"nome_do_robo={BOT_NAME}&status_0{STATUS}=4&paginate={PAGINATE}&base={BASE_FILTER}"
+routes = f"nome_do_robo={BOT_NAME}&status_0{STATUS}=4"
 
 WAIT_TIMES = {
     "VERY_SHORT": 5,
@@ -28,3 +28,5 @@ WAIT_TIMES = {
     "LONG": 90,
     "VERY_LONG": 180,
 }
+
+NOME_PLANILHA = config("NOME_PLANILHA")

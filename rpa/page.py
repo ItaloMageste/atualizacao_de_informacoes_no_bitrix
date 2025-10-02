@@ -1,8 +1,12 @@
 import re
+import json
 import requests
 import unicodedata
-from datetime import datetime
+import pandas as pd
+from time import sleep
+from datetime import datetime, date
 from utilities.settings import BITRIX_WEBHOOK
+from utilities.common.exceptions import ClientExecutionException
 
 class AtualizacaoDeInformacoesNoBitrix_Page:
 
@@ -142,7 +146,7 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
 
         return campos_para_atualizar
     
-    def atualizar_campo_bitrix(self, id_card, id_do_campo, tipo_do_campo, dado, tipo_card):
+    def atualizar_campos_bitrix(self, id_card, campos, tipo_card):
 
         def _normalizar_string(texto):
 
@@ -190,14 +194,33 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
                 url = url,
                 json = payload
             )
-            result = response.json().get("result", [])[0]
-            return int(result['ID'])
+            result = response.json().get("result", [])
+
+            if not result and len(nome.split()) > 2:
+
+                nome = nome.split()[0] + ' ' + nome.split()[1] 
+                payload = {
+                "filter": {
+                    "NAME_SEARCH": nome
+                    }
+                }
+
+                response = requests.post(
+                    url = url,
+                    json = payload
+                )
+                result = response.json().get("result", [])
+
+            if len(result) < 1:
+                return [ ]
+            
+            return int(result[0].get('ID', None))
         
         def _buscar_contato_por_nome(nome):
 
             url = BITRIX_WEBHOOK + "crm.contact.list"
 
-            nome_completo = dado.replace('[c]','').replace('[C]','').strip()
+            nome_completo = nome.replace('[c]','').replace('[C]','').strip()
             partes = nome_completo.split()
 
             payload = {
@@ -226,13 +249,16 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
 
             try:
                 if tipo_do_campo == 'string':
+
+                    if id_do_campo == 'UF_CRM_1734547962' and str(dado).endswith('.0'):
+                        dado = str(dado).replace('.0','')
                     return str(dado)
                 
                 elif tipo_do_campo == 'integer':
                     return int(dado)
 
                 elif tipo_do_campo == 'double':
-                    return float(str(dado).replace(',', '.'))
+                    return float(str(dado).replace('.', '').replace(',', '.'))
 
                 elif tipo_do_campo == 'boolean':
                     if isinstance(dado, bool):
@@ -247,19 +273,22 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
                     return str(dado)[0] if dado else None
 
                 elif tipo_do_campo == 'date':
-
-                    dado = dado.replace('/','-')
-
-                    if isinstance(dado, datetime):
+                    if isinstance(dado, (datetime, pd.Timestamp)):
                         return dado.date().isoformat()
-                    elif isinstance(dado, str) and dado != '':
+
+                    elif isinstance(dado, date):
+                        return dado.isoformat()
+
+                    elif isinstance(dado, str) and dado.strip():
+                        dado = dado.replace('/', '-')
                         return datetime.strptime(dado, "%d-%m-%Y").date().isoformat()
 
+
                 elif tipo_do_campo == 'datetime':
-
-                    dado = dado.replace('/','-')
-
-                    if isinstance(dado, datetime):
+                    if isinstance(dado, str) and dado != '':
+                        dado = dado.replace('/','-')
+                        return datetime.strptime(dado, "%d-%m-%Y").date().isoformat()
+                    elif isinstance(dado, datetime):
                         return dado.isoformat()
                     return datetime.strptime(dado, "%Y-%m-%d %H:%M:%S").isoformat()
 
@@ -299,27 +328,109 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
             except Exception as e:
                 raise ValueError(f"[{id_do_campo}] Erro ao validar '{dado}': {e}")
 
-        dado_validado = _validar_dado(id_do_campo, tipo_do_campo, dado, tipo_card)
+        def _conferir_se_campo_foi_atualizado_corretamente(payload, campo_id, card_id):
+
+            print('Conferindo se o dado foi atualizado corretamente no Bitrix!')
+            
+            url = "https://bwa.bitrix24.com.br/rest/2072/csqxphcxktu5ujiu/crm.company.get"
+            params = {"id": card_id}
+
+            while True:
+                try:
+                    response = requests.get(url, params=params)
+                    response.raise_for_status()
+
+                    result = response.json().get('result', None)
+                    if not result:
+                        raise KeyError('Result não encontrado no company get')
+                    break
+                except (KeyError, requests.RequestException) as error:
+                    print(f'ERRO na consulta do card {card_id}: {error}')
+                    sleep(2)
+                    continue
+
+            dado_no_bitrix = result[campo_id]
+            dado_atualizacao = payload['fields'][campo_id]
+
+            dado_no_bitrix = str(dado_no_bitrix)
+            dado_atualizacao = str(dado_atualizacao)
+
+            if not dado_atualizacao or dado_atualizacao == '0' or dado_atualizacao == 0 or dado_atualizacao == 'false' or dado_atualizacao == 'False':
+                if dado_no_bitrix == '0' or  dado_no_bitrix == 0 or dado_no_bitrix == 'false' or dado_no_bitrix == 'False' or dado_no_bitrix == False:
+                    print('Dado atualizado com sucesso!')
+                    return True
+                
+            elif dado_atualizacao:
+                if dado_no_bitrix == '1' or  dado_no_bitrix == 1 or dado_no_bitrix == 'true' or dado_no_bitrix == 'True' or dado_no_bitrix == True:
+                    print('Dado atualizado com sucesso!')
+                    return True
+                
+            if dado_no_bitrix == dado_atualizacao:
+                print('Dado atualizado com sucesso!')
+                return True
+            return False
 
         payload = {
             "id": id_card,
-            "fields": {
-                id_do_campo: dado_validado
-            }	
+            "fields": {}
         }
+
+        for dado in campos:
+
+            if dado['nome_do_campo'] == 'ID':
+                continue
+            elif dado['nome_do_campo'] == 'CNPJ':
+                continue
+
+            dado_validado = _validar_dado(dado['id_do_campo'], dado['tipo_de_dado'], dado['dado_para_atualizar'], tipo_card)
+            if not dado_validado:
+                continue
+            payload['fields'][dado['id_do_campo']] = dado_validado
 
         if tipo_card == 'Company':
             url = BITRIX_WEBHOOK + "crm.company.update"
 
-
         if tipo_card == 'Deal':
-            url = BITRIX_WEBHOOK + "crm.deal.update"
+            url = BITRIX_WEBHOOK + "crm.deal.update"        
 
-        try:
-            response = requests.post(url, json=payload)
-            if response.status_code == 200:
-                print(f'{tipo_card} Card {id_card} no campo {id_do_campo} atualizado com o novo valor {dado_validado}')
-                return True
-            return False
-        except Exception as e:
-            raise Exception(f"Erro ao atualizar o {tipo_card} Card: {e}")
+        while True:
+        
+            response = requests.post(url, json = payload).json()
+            
+            error = response.get('error')
+            result = response.get('result')
+            error_description = response.get('error_description')
+
+            if error_description == 'Company is not found':
+                with open("EmpresasNaoEcontradas.txt", "a", encoding="utf-8") as arquivo:
+                    arquivo.write("======================================================" + "\n")
+                    arquivo.write(f'Erro na empresa de ID {id_card}: {error_description}' + "\n")
+                    arquivo.write(f'Payload utilizado:' + "\n")
+                    arquivo.write(json.dumps(payload, indent=2, ensure_ascii=False))
+                    arquivo.write("\n")
+                raise ClientExecutionException('Empresa nao encontrada no Bitrix!', success = False)
+
+            if error == 'QUERY_LIMIT_EXCEEDED':
+                print("Limite de requisições excedido. Aguardando 5 segundos...")
+                sleep(5)
+                continue
+
+            if error:
+                sleep(5)
+                print(error)
+                continue
+
+            if not result:
+                sleep(5)
+                print(response.json())
+                continue
+            
+            print(f'{tipo_card} Card {id_card} atualizado com os novos valores!')
+        
+            # TODO Corrigir a conferencia da atualização
+            # if not _conferir_se_campo_foi_atualizado_corretamente(payload, dado['id_do_campo'], id_card):
+            #     print('O Campo não foi atualizado corretamente, tentando novamente!')
+            #     continue
+
+            break
+        print('')
