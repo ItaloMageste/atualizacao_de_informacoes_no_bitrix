@@ -4,6 +4,7 @@ from pathlib import Path
 from utilities.settings import DOWNLOADS_DIR
 from utilities.common.files import clean_directory
 from rpa.page import AtualizacaoDeInformacoesNoBitrix_Page
+from utilities.common.files import get_file_by_partial_name
 from utilities.common.portalApi import download_execution_files, login_on_portal
 
 from settings import NOME_PLANILHA
@@ -21,13 +22,11 @@ class AtualizacaoDeInformacoesNoBitrix_Process(AtualizacaoDeInformacoesNoBitrix_
 
         token = login_on_portal()
         clean_directory(DOWNLOADS_DIR, [".gitkeep"])
-        download_execution_files(token, client.id_execucao, "input", DOWNLOADS_DIR, extract_files=True)
+        download_execution_files(token, client.id_execucao, "input", DOWNLOADS_DIR, extract_files = True)
         
-        nome_arquivo = NOME_PLANILHA
+        path_csv = get_file_by_partial_name(DOWNLOADS_DIR, '.csv', 3)
+        nome_arquivo = path_csv.name
 
-        path_csv = Path(Path.cwd()/'tabela'/ nome_arquivo) # TODO Remover antes de finalmente entregar o RPA
-        
-        card_id = int(client.CARD_ID)
 
         if '.csv' in nome_arquivo:
             df = pd.read_csv(path_csv, sep = ';')
@@ -35,16 +34,19 @@ class AtualizacaoDeInformacoesNoBitrix_Process(AtualizacaoDeInformacoesNoBitrix_
         elif '.xlsx' in nome_arquivo:
             df = pd.read_excel(path_csv)
 
-        nomes_colunas = list(df.columns)
 
-        if 'Nome da Empresa' in nomes_colunas:
+        if 'Nome da Empresa' in df.columns:
             tipo_planilha = 'Company'
-        elif 'Nome do negócio' in nomes_colunas:
+        elif 'Nome do negócio' in df.columns:
             tipo_planilha = 'Deal'
         else:
-            # raise ValueError('Não foi possível verificar se a planilha é de Empresas ou de Negócios!')
             tipo_planilha = 'Company'
 
+        df = df.replace(r'^\s*$', pd.NA, regex = True)  
+        df = df.dropna(axis = 1, how = 'all')
+        nomes_colunas = list(df.columns)
+        card_id = int(df['ID'].iloc[0])
+    
         colunas_company = self.consultar_campos_no_bitrix(tipo_planilha, nomes_colunas)
 
         df_filtrado_por_id = df[df['ID'] == card_id].fillna('')
@@ -65,12 +67,10 @@ class AtualizacaoDeInformacoesNoBitrix_Process(AtualizacaoDeInformacoesNoBitrix_
                 coluna["dado_para_atualizar"] = dado_att
         
         self.atualizar_campos_bitrix(
-            id_card =           client.CARD_ID,
+            id_card =           card_id,
             campos =            colunas_company,
             tipo_card =         tipo_planilha
         )
-        print(f'Dados da planilha: {NOME_PLANILHA}')
-        print('[AVISO] Fim da execução')
     
     def __str__(self) -> str:
         return self.BOT_DIRECTORY_NAME

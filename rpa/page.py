@@ -280,9 +280,13 @@ class AtualizacaoDeInformacoesNoBitrix_Page:
                         return dado.isoformat()
 
                     elif isinstance(dado, str) and dado.strip():
-                        dado = dado.replace('/', '-')
-                        return datetime.strptime(dado, "%d-%m-%Y").date().isoformat()
+                        dado = dado.strip().replace('/', '-')
 
+                        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+                            try:
+                                return datetime.strptime(dado, fmt).date().strftime("%d-%m-%Y")
+                            except ValueError:
+                                continue
 
                 elif tipo_do_campo == 'datetime':
                     if isinstance(dado, str) and dado != '':
